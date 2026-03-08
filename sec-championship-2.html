@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>SEC Championship · SC vs Texas · 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #fff; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    button, select, input { font-family: 'Inter', sans-serif; }
+    @keyframes dot   { 0%,100%{opacity:.3;transform:scale(.8)} 50%{opacity:1;transform:scale(1)} }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* Update panel — responsive */
+    .update-panel-wrap { position: fixed; bottom: 64px; right: 14px; z-index: 300; }
+    .update-panel-sheet {
+      background: #fff; border: 1px solid #E8E8E8; border-radius: 16px;
+      padding: 18px; width: 310px; box-shadow: 0 8px 32px rgba(0,0,0,.12);
+      max-height: 80vh; overflow-y: auto;
+    }
+
+    /* Mobile: full-width bottom sheet */
+    @media (max-width: 480px) {
+      .update-panel-wrap { bottom: 0; right: 0; left: 0; }
+      .update-panel-sheet {
+        width: 100%; border-radius: 16px 16px 0 0;
+        max-height: 85vh; padding: 16px;
+      }
+      .update-btns { align-items: stretch !important; }
+      .update-btns button { text-align: center; }
+    }
+
+    /* Tablet: nudge inward */
+    @media (min-width: 481px) and (max-width: 768px) {
+      .update-panel-wrap { right: 16px; bottom: 70px; }
+      .update-panel-sheet { width: 340px; }
+    }
+
+    /* Desktop: cap content width, center */
+    @media (min-width: 769px) {
+      .update-panel-wrap { right: calc(50% - 350px + 14px); }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const SC      = "#73000A";
+const TEX     = "#BF5700";
+const BG      = "#FFFFFF";
+const SURFACE = "#F7F7F7";
+const CARD    = "#FFFFFF";
+const BORDER  = "#E8E8E8";
+const TEXT    = "#111111";
+const MUTED   = "#777777";
+const DIM     = "#CCCCCC";
+const RED     = "#CC0000";
+const GREEN   = "#1a7a1a";
+const QS      = 10 * 60;
+
+const parseTime = t => { const [m,s] = (t||"0:00").split(":").map(Number); return (m||0)*60+(s||0); };
+const fmtTime   = sec => { const s=Math.max(0,sec), m=Math.floor(s/60), ss=s%60; return `${m}:${ss.toString().padStart(2,"0")}`; };
+const pct       = (m,a) => a===0 ? "N/A" : ((m/a)*100).toFixed(1)+"%";
+
+const S = { offRtg:117.9, defRtg:76.7, netRtg:41.2, rebPg:42.1, tovPg:12.4, stlPg:10.2, oppg:54.2, fgPct:49.1, sos:11.2, tPpg:85.0, tOppg:70.5 };
+const T = { offRtg:112.4, defRtg:82.3, netRtg:30.1, rebPg:38.7, tovPg:17.8, stlPg:8.4,  oppg:62.3, fgPct:50.8, sos:12.8, tPpg:84.0, tOppg:64.0 };
+
+function runModel(s,t) {
+  const wt = [[s.netRtg,t.netRtg,false,.30],[s.defRtg,t.defRtg,true,.25],[s.offRtg,t.offRtg,false,.20],[s.tPpg-s.tOppg,t.tPpg-t.tOppg,false,.10],[s.tovPg,t.tovPg,true,.10],[s.sos,t.sos,false,.05]];
+  let sw=0, tw=0;
+  wt.forEach(([sv,tv,lb,w]) => { const f = v => lb ? (1/Math.abs(v)||.001) : Math.abs(v); sw+=f(sv)*w; tw+=f(tv)*w; });
+  const scWin = Math.round((sw/(sw+tw))*100);
+  const la = 72;
+  return { scWin, txWin:100-scWin, scProj:Math.round(Math.max(60,Math.min(94,la*(s.offRtg/100)*(2-t.defRtg/100)))), txProj:Math.round(Math.max(54,Math.min(86,la*(t.offRtg/100)*(2-s.defRtg/100)))) };
+}
+const MODEL = runModel(S,T);
+
+const NARRATIVE = [
+  `Texas opened with a statement. The Longhorns blitzed South Carolina 27-12 in the first quarter, a 15-point hole that the Gamecocks spent the rest of the game trying to climb out of. SC battled back in Q2 and Q3, outscoring Texas in both quarters and trimming the deficit, but every time the Gamecocks threatened, Texas answered. The model had given South Carolina a ${MODEL.scWin}% win probability entering the game. The first eight minutes made that number irrelevant.`,
+  `Justice Carlton was the story of the 2026 SEC Championship. The junior forward finished with 15 points on 6-of-8 shooting and a game-high 5 steals, both more than double her season averages, and completely neutralized South Carolina's transition attack. Madison Booker delivered when the Gamecocks needed stops most, scoring 18 on 8-of-15 shooting. Jordan Lee added 12 points and hit both of his threes. Texas shot 53.2% from the field and won the rebounding battle by 8. This was not an upset. It was a dismantling.`,
+  `The decisive subplot was Ta'Niya Latson's uncharacteristic silence. SC's engine finished with just 4 points on 1-of-4 shooting, held far below her 18.5-point season average. Joyce Edwards led the Gamecocks with 13 and Agot Makeer gave 9 off the bench, but without Latson generating, South Carolina's offense never found the rhythm it needed to sustain a comeback run. Texas wins its first SEC Women's Basketball Championship, 78-61. Final: Texas 78, South Carolina 61.`,
+];
+
+const INIT = {
+  score:         { SCAR: 61, TEX: 78 },
+  quarter:       4,
+  timeLeft:      "0:00",
+  clockRunning:  false,
+  elapsed:       4*QS,
+  possession:    "TEX",
+  fouls:         { SCAR: 4, TEX: 5 },
+  shooting: {
+    SCAR: { fgm:20, fga:43, tpm:4, tpa:12, ftm:17, fta:22 },
+    TEX:  { fgm:29, fga:55, tpm:5, tpa:9,  ftm:15, fta:20 },
+  },
+  quarterScores: { SCAR:[12,16,16,17], TEX:[27,18,12,21] },
+  players: {
+    SCAR: [
+      {num:"00",name:"Ta'Niya Latson",    pos:"G",pts:4,  reb:1,ast:3,stl:1,inj:false,avg:{pts:18.5,reb:3.2,ast:4.1,fg:"49.8%"}},
+      {num:"5", name:"Tessa Johnson",     pos:"G",pts:10, reb:3,ast:1,stl:0,inj:false,avg:{pts:12.6,reb:4.1,ast:3.3,fg:"44.2%"}},
+      {num:"8", name:"Joyce Edwards",     pos:"F",pts:13, reb:6,ast:2,stl:1,inj:false,avg:{pts:18.5,reb:8.3,ast:1.8,fg:"59.9%"}},
+      {num:"11",name:"Madina Okot",       pos:"C",pts:2,  reb:5,ast:0,stl:1,inj:false,avg:{pts:9.4, reb:9.1,ast:0.8,fg:"58.3%"}},
+      {num:"25",name:"Raven Johnson",     pos:"G",pts:8,  reb:2,ast:4,stl:2,inj:false,avg:{pts:10.0,reb:5.2,ast:6.4,fg:"42.3%"}},
+      {num:"1", name:"Maddy McDaniel",    pos:"G",pts:7,  reb:0,ast:0,stl:0,inj:false,avg:{pts:8.3, reb:3.8,ast:2.4,fg:"44.1%"}},
+      {num:"30",name:"Maryam Dauda",      pos:"F",pts:0,  reb:1,ast:0,stl:0,inj:false,avg:{pts:7.8, reb:5.6,ast:0.6,fg:"55.1%"}},
+      {num:"31",name:"Alicia Tournebize", pos:"F",pts:8,  reb:6,ast:0,stl:0,inj:false,avg:{pts:2.4, reb:1.8,ast:0.3,fg:"47.2%"}},
+      {num:"44",name:"Agot Makeer",       pos:"G",pts:9,  reb:3,ast:2,stl:0,inj:false,avg:{pts:3.6, reb:2.1,ast:0.7,fg:"41.0%"}},
+      {num:"21",name:"Chloe Kitts",       pos:"F",pts:0, reb:0,ast:0,stl:0,inj:true, avg:null},
+    ],
+    TEX: [
+      {num:"3", name:"Rori Harmon",         pos:"G",pts:9,  reb:3,ast:5,stl:1,inj:false,avg:{pts:11.4,reb:3.8,ast:7.2,fg:"41.6%"}},
+      {num:"7", name:"Jordan Lee",          pos:"G",pts:12, reb:2,ast:3,stl:1,inj:false,avg:{pts:13.2,reb:3.1,ast:2.6,fg:"43.8%"}},
+      {num:"11",name:"Justice Carlton",     pos:"F",pts:15, reb:5,ast:3,stl:5,inj:false,avg:{pts:5.8, reb:4.2,ast:0.8,fg:"48.3%"}},
+      {num:"25",name:"Breya Cunningham",    pos:"F",pts:12, reb:9,ast:0,stl:0,inj:false,avg:{pts:14.2,reb:8.1,ast:1.4,fg:"60.7%"}},
+      {num:"35",name:"Madison Booker",      pos:"F",pts:18, reb:4,ast:3,stl:1,inj:false,avg:{pts:18.8,reb:6.3,ast:3.2,fg:"46.1%"}},
+      {num:"00",name:"Kyla Oldacre",        pos:"C",pts:4,  reb:3,ast:0,stl:0,inj:false,avg:{pts:11.8,reb:7.4,ast:0.9,fg:"65.5%"}},
+      {num:"1", name:"Bryanna Preston",     pos:"G",pts:2,  reb:0,ast:1,stl:0,inj:false,avg:{pts:2.1, reb:0.8,ast:0.6,fg:"100%"}},
+      {num:"21",name:"Ashton Judd",         pos:"G",pts:2,  reb:0,ast:0,stl:0,inj:false,avg:{pts:5.3, reb:2.3,ast:1.8,fg:"40.2%"}},
+      {num:"23",name:"Aaliyah Crump",       pos:"G",pts:7,  reb:3,ast:1,stl:1,inj:false,avg:{pts:4.4, reb:2.0,ast:1.2,fg:"38.1%"}},
+      {num:"34",name:"Teya Sidberry",       pos:"F",pts:0, reb:0,ast:0,stl:0,inj:false,avg:{pts:7.1, reb:4.6,ast:1.1,fg:"44.9%"}},
+      {num:"16",name:"Lovisa Asbrink Hose", pos:"C",pts:0, reb:0,ast:0,stl:0,inj:false,avg:{pts:4.1, reb:5.8,ast:0.3,fg:"52.4%"}},
+      {num:"23",name:"Aaliyah Moore",       pos:"F",pts:0, reb:0,ast:0,stl:0,inj:true, avg:null},
+    ],
+  },
+  history: [
+    {label:"Season Record", SCAR:"31-2", TEX:"31-5"},
+    {label:"SEC Record",    SCAR:"15-1", TEX:"13-3"},
+    {label:"H2H 2025-26",   SCAR:"1-1",  TEX:"1-1"},
+    {label:"Championships", SCAR:"4",    TEX:"0"},
+    {label:"Seed",          SCAR:"#1",   TEX:"#3"},
+  ],
+};
+
+const TABS = [
+  {id:"preview",label:"Analysis",icon:"⚡"},
+  {id:"score",  label:"Score",   icon:"🏀"},
+  {id:"stats",  label:"Stats",   icon:"📊"},
+  {id:"players",label:"Players", icon:"👤"},
+  {id:"info",   label:"Info",    icon:"📋"},
+];
+
+const SLabel = ({children}) => (
+  <div style={{fontSize:9,fontWeight:800,letterSpacing:3,color:MUTED,textTransform:"uppercase",marginBottom:14,textAlign:"center"}}>{children}</div>
+);
+const Card = ({children,style={}}) => (
+  <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:18,marginBottom:12,...style}}>{children}</div>
+);
+const TeamHdr = () => (
+  <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
+    <span style={{fontSize:10,fontWeight:800,color:SC,letterSpacing:2}}>SOUTH CAROLINA</span>
+    <span style={{fontSize:10,fontWeight:800,color:TEX,letterSpacing:2}}>TEXAS</span>
+  </div>
+);
+
+const TabBar = ({tab,setTab,pos}) => (
+  <div style={{display:"flex",background:BG,borderTop:pos==="bottom"?`1px solid ${BORDER}`:"none",borderBottom:pos==="top"?`1px solid ${BORDER}`:"none",paddingBottom:pos==="bottom"?"env(safe-area-inset-bottom,0px)":0}}>
+    {TABS.map(t => {
+      const active = tab===t.id;
+      return (
+        <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 2px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative"}}>
+          {active && <div style={{position:"absolute",[pos==="top"?"bottom":"top"]:0,left:"15%",right:"15%",height:2,borderRadius:99,background:SC}}/>}
+          <span style={{fontSize:14}}>{t.icon}</span>
+          <span style={{fontSize:9,fontWeight:active?800:700,color:active?TEXT:MUTED,letterSpacing:0.5}}>{t.label.toUpperCase()}</span>
+        </button>
+      );
+    })}
+  </div>
+);
+
+function useTypewriter(paragraphs, active) {
+  const [displayed, setDisplayed] = useState([]);
+  const [paraIdx,   setParaIdx]   = useState(0);
+  const [charIdx,   setCharIdx]   = useState(0);
+  const [thinking,  setThinking]  = useState(true);
+  const timer = useRef(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const t = setTimeout(() => setThinking(false), 1400);
+    return () => clearTimeout(t);
+  }, [active]);
+
+  useEffect(() => {
+    if (!active || thinking || paraIdx >= paragraphs.length) return;
+    const cur = paragraphs[paraIdx];
+    if (charIdx < cur.length) {
+      timer.current = setTimeout(() => {
+        setDisplayed(p => { const n=[...p]; if(!n[paraIdx])n[paraIdx]=""; n[paraIdx]=cur.slice(0,charIdx+1); return n; });
+        setCharIdx(c => c+1);
+      }, 12);
+    } else if (paraIdx < paragraphs.length-1) {
+      timer.current = setTimeout(() => { setParaIdx(p=>p+1); setCharIdx(0); }, 180);
+    }
+    return () => clearTimeout(timer.current);
+  }, [active, thinking, charIdx, paraIdx, paragraphs]);
+
+  const done = !thinking && paraIdx >= paragraphs.length-1 && charIdx >= (paragraphs[paragraphs.length-1]||"").length;
+  return { displayed, thinking, done };
+}
+
+function useGameClock(data, setData) {
+  const secsLeft = useRef(parseTime(data.timeLeft));
+  const elapsed  = useRef(data.elapsed || 0);
+  const running  = useRef(data.clockRunning);
+
+  useEffect(() => { secsLeft.current = parseTime(data.timeLeft); }, [data.timeLeft]);
+  useEffect(() => { elapsed.current  = data.elapsed || 0; },       [data.elapsed]);
+  useEffect(() => { running.current  = data.clockRunning; },        [data.clockRunning]);
+
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if (!running.current || secsLeft.current <= 0) return;
+      secsLeft.current = Math.max(0, secsLeft.current - 1);
+      elapsed.current  = elapsed.current + 1;
+      setData(d => ({ ...d, timeLeft: fmtTime(secsLeft.current), elapsed: elapsed.current }));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, []);
+}
+
+function UpdatePanel({ data, setData }) {
+  const [open, setOpen] = useState(false);
+  const fresh = () => ({
+    scScore:  data.score.SCAR,    texScore: data.score.TEX,
+    quarter:  data.quarter,       timeLeft: data.timeLeft,
+    possession: data.possession,
+    scFouls:  data.fouls.SCAR,    texFouls: data.fouls.TEX,
+    scFgm:  data.shooting.SCAR.fgm, scFga:  data.shooting.SCAR.fga,
+    scTpm:  data.shooting.SCAR.tpm, scTpa:  data.shooting.SCAR.tpa,
+    scFtm:  data.shooting.SCAR.ftm, scFta:  data.shooting.SCAR.fta,
+    texFgm: data.shooting.TEX.fgm,  texFga: data.shooting.TEX.fga,
+    texTpm: data.shooting.TEX.tpm,  texTpa: data.shooting.TEX.tpa,
+    texFtm: data.shooting.TEX.ftm,  texFta: data.shooting.TEX.fta,
+  });
+  const [form, setForm] = useState(fresh);
+  const openPanel = () => { setForm(fresh()); setOpen(true); };
+  const setF = (k,v) => setForm(f => ({...f, [k]: v}));
+  const setN = (k,v) => setForm(f => ({...f, [k]: Number(v)}));
+
+  const inp = (label, field, color) => (
+    <div style={{display:"flex",flexDirection:"column",gap:3,flex:1}}>
+      <label style={{fontSize:8,fontWeight:700,color:MUTED,letterSpacing:1}}>{label}</label>
+      <input
+        type={field==="timeLeft" ? "text" : "number"}
+        value={form[field]}
+        onChange={e => field==="timeLeft" ? setF(field,e.target.value) : setN(field,e.target.value)}
+        style={{padding:"7px 8px",border:`1px solid ${BORDER}`,borderRadius:7,fontSize:12,fontWeight:700,color:color||TEXT,width:"100%",outline:"none"}}
+      />
+    </div>
+  );
+
+  const apply = () => {
+    const newElapsed = (form.quarter-1)*QS + (QS - parseTime(form.timeLeft));
+    setData(d => ({
+      ...d,
+      score:      { SCAR: form.scScore,  TEX: form.texScore },
+      quarter:    form.quarter,
+      timeLeft:   form.timeLeft,
+      elapsed:    newElapsed,
+      clockRunning: true,
+      possession: form.possession,
+      fouls:      { SCAR: form.scFouls, TEX: form.texFouls },
+      shooting: {
+        SCAR: { fgm:form.scFgm,  fga:form.scFga,  tpm:form.scTpm,  tpa:form.scTpa,  ftm:form.scFtm,  fta:form.scFta  },
+        TEX:  { fgm:form.texFgm, fga:form.texFga, tpm:form.texTpm, tpa:form.texTpa, ftm:form.texFtm, fta:form.texFta },
+      },
+    }));
+    setOpen(false);
+  };
+
+  const toggleClock = () => { setData(d => ({...d, clockRunning:!d.clockRunning})); };
+
+  return (
+    <div className="update-panel-wrap">
+      {!open && (
+        <div className="update-btns" style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
+          <button onClick={toggleClock} style={{background:data.clockRunning?RED:GREEN,color:"#fff",border:"none",borderRadius:99,padding:"8px 16px",fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:1,boxShadow:`0 4px 16px ${data.clockRunning?"rgba(204,0,0,.25)":"rgba(26,122,26,.25)"}`}}>
+            {data.clockRunning ? "⏸ PAUSE" : "▶ RESUME"}
+          </button>
+          <button onClick={openPanel} style={{background:SC,color:"#fff",border:"none",borderRadius:99,padding:"10px 18px",fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:1,boxShadow:"0 4px 16px rgba(115,0,10,.25)"}}>
+            ✏ UPDATE
+          </button>
+        </div>
+      )}
+      {open && (
+        <div className="update-panel-sheet">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <span style={{fontSize:10,fontWeight:800,letterSpacing:2,color:TEXT}}>LIVE UPDATE</span>
+            <button onClick={()=>setOpen(false)} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:MUTED,lineHeight:1}}>✕</button>
+          </div>
+          <div style={{fontSize:9,fontWeight:800,color:MUTED,letterSpacing:2,marginBottom:8}}>GAME STATE</div>
+          <div style={{display:"flex",gap:6,marginBottom:6}}>
+            {inp("SC SCORE","scScore",SC)}{inp("TEX SCORE","texScore",TEX)}{inp("QUARTER","quarter",TEXT)}{inp("TIME LEFT","timeLeft",TEXT)}
+          </div>
+          <div style={{display:"flex",gap:6,marginBottom:14}}>
+            {inp("SC FOULS","scFouls",SC)}{inp("TEX FOULS","texFouls",TEX)}
+            <div style={{display:"flex",flexDirection:"column",gap:3,flex:1}}>
+              <label style={{fontSize:8,fontWeight:700,color:MUTED,letterSpacing:1}}>POSSESSION</label>
+              <select value={form.possession} onChange={e=>setF("possession",e.target.value)} style={{padding:"7px 8px",border:`1px solid ${BORDER}`,borderRadius:7,fontSize:12,fontWeight:700,outline:"none"}}>
+                <option value="SCAR">SC</option><option value="TEX">TEX</option>
+              </select>
+            </div>
+          </div>
+          <div style={{fontSize:9,fontWeight:800,color:SC,letterSpacing:2,marginBottom:8}}>SC SHOOTING</div>
+          <div style={{display:"flex",gap:6,marginBottom:6}}>
+            {inp("FGM","scFgm",SC)}{inp("FGA","scFga",SC)}{inp("3PM","scTpm",SC)}{inp("3PA","scTpa",SC)}
+          </div>
+          <div style={{display:"flex",gap:6,marginBottom:14}}>
+            {inp("FTM","scFtm",SC)}{inp("FTA","scFta",SC)}
+          </div>
+          <div style={{fontSize:9,fontWeight:800,color:TEX,letterSpacing:2,marginBottom:8}}>TEX SHOOTING</div>
+          <div style={{display:"flex",gap:6,marginBottom:6}}>
+            {inp("FGM","texFgm",TEX)}{inp("FGA","texFga",TEX)}{inp("3PM","texTpm",TEX)}{inp("3PA","texTpa",TEX)}
+          </div>
+          <div style={{display:"flex",gap:6,marginBottom:16}}>
+            {inp("FTM","texFtm",TEX)}{inp("FTA","texFta",TEX)}
+          </div>
+          <button onClick={apply} style={{width:"100%",background:SC,color:"#fff",border:"none",borderRadius:8,padding:"12px 0",fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:1.5,marginBottom:8}}>
+            APPLY + START CLOCK
+          </button>
+          <button onClick={()=>setOpen(false)} style={{width:"100%",background:"none",border:`1px solid ${BORDER}`,borderRadius:8,padding:"10px 0",fontSize:10,fontWeight:700,cursor:"pointer",color:MUTED}}>
+            CANCEL
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreviewTab() {
+  const [started, setStarted] = useState(false);
+  const [rk, setRk] = useState(0);
+  const { displayed, thinking, done } = useTypewriter(NARRATIVE, started);
+  const factors = [
+    {label:"Off. Efficiency",  sv:S.offRtg, tv:T.offRtg},
+    {label:"Def. Efficiency",  sv:S.defRtg, tv:T.defRtg, lb:true},
+    {label:"Net Rating",       sv:S.netRtg, tv:T.netRtg},
+    {label:"Rebounds / Game",  sv:S.rebPg,  tv:T.rebPg},
+    {label:"Turnovers / Game", sv:S.tovPg,  tv:T.tovPg, lb:true},
+  ];
+  return (
+    <div>
+      <Card>
+        <SLabel>Win Probability (Pre-Game Model)</SLabel>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12}}>
+          <div><div style={{fontSize:38,fontWeight:900,color:SC,lineHeight:1}}>{MODEL.scWin}%</div><div style={{fontSize:9,fontWeight:800,color:SC,letterSpacing:2,marginTop:3}}>SOUTH CAROLINA</div></div>
+          <div style={{fontSize:9,color:DIM,fontWeight:700}}>vs</div>
+          <div style={{textAlign:"right"}}><div style={{fontSize:38,fontWeight:900,color:TEX,lineHeight:1}}>{MODEL.txWin}%</div><div style={{fontSize:9,fontWeight:800,color:TEX,letterSpacing:2,marginTop:3}}>TEXAS</div></div>
+        </div>
+        <div style={{display:"flex",borderRadius:3,overflow:"hidden",height:7}}>
+          <div style={{width:`${MODEL.scWin}%`,background:SC}}/><div style={{flex:1,background:TEX}}/>
+        </div>
+        <div style={{marginTop:10,fontSize:9,color:MUTED,textAlign:"center",whiteSpace:"nowrap"}}>Weighted model: net rating (30%) · def. efficiency (25%) · off. efficiency (20%) · tournament performance (10%) · turnover rate (10%) · SOS (5%)</div>
+      </Card>
+      <Card>
+        <SLabel>Final Score</SLabel>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:32}}>
+          <div style={{textAlign:"center"}}><div style={{fontSize:9,fontWeight:800,color:SC,letterSpacing:2,marginBottom:6}}>SC</div><div style={{fontSize:54,fontWeight:900,color:TEXT,lineHeight:1}}>61</div></div>
+          <div style={{fontSize:14,color:DIM,fontWeight:700}}>·</div>
+          <div style={{textAlign:"center"}}><div style={{fontSize:9,fontWeight:800,color:TEX,letterSpacing:2,marginBottom:6}}>TEX</div><div style={{fontSize:54,fontWeight:900,color:TEXT,lineHeight:1}}>78</div></div>
+        </div>
+        <div style={{marginTop:10,fontSize:10,color:MUTED,textAlign:"center",whiteSpace:"nowrap"}}>2026 SEC Women's Basketball Championship · FINAL</div>
+      </Card>
+      <Card>
+        <SLabel>Analytics Matchup</SLabel><TeamHdr/>
+        {factors.map((f,i) => {
+          const scB = f.lb ? f.sv<f.tv : f.sv>f.tv;
+          const max = Math.max(f.sv,f.tv)*1.15;
+          return (
+            <div key={f.label} style={{marginBottom:i<factors.length-1?16:0}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                <span style={{fontSize:12,fontWeight:scB?800:400,color:scB?SC:MUTED}}>{f.sv}</span>
+                <span style={{fontSize:9,fontWeight:700,color:MUTED,letterSpacing:1}}>{f.label.toUpperCase()}</span>
+                <span style={{fontSize:12,fontWeight:!scB?800:400,color:!scB?TEX:MUTED}}>{f.tv}</span>
+              </div>
+              <div style={{display:"flex",gap:4}}>
+                <div style={{flex:1,height:4,borderRadius:99,background:SURFACE,overflow:"hidden",transform:"scaleX(-1)"}}><div style={{width:`${(f.sv/max)*100}%`,height:"100%",background:scB?SC:DIM,borderRadius:99}}/></div>
+                <div style={{flex:1,height:4,borderRadius:99,background:SURFACE,overflow:"hidden"}}><div style={{width:`${(f.tv/max)*100}%`,height:"100%",background:!scB?TEX:DIM,borderRadius:99}}/></div>
+              </div>
+            </div>
+          );
+        })}
+      </Card>
+      <Card key={rk}>
+        <SLabel>Postgame Analysis</SLabel>
+        {!started && (
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:11,color:MUTED,marginBottom:16,lineHeight:1.6,textAlign:"center"}}>Full postgame breakdown powered by final box score data. Key performances, decisive moments, and game story.</div>
+            <button onClick={()=>setStarted(true)} style={{background:TEX,color:"#fff",border:"none",borderRadius:8,padding:"12px 28px",fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:1.5}}>VIEW ANALYSIS</button>
+          </div>
+        )}
+        {started && thinking && (
+          <div style={{textAlign:"center",padding:"18px 0 14px"}}>
+            <div style={{fontSize:11,color:MUTED,marginBottom:12}}>Loading postgame analysis</div>
+            <div style={{display:"flex",justifyContent:"center",gap:7}}>
+              {[SC,DIM,TEX].map((c,i) => <div key={i} style={{width:8,height:8,borderRadius:99,background:c,animation:`dot 1.2s ease-in-out ${i*.2}s infinite`}}/>)}
+            </div>
+          </div>
+        )}
+        {started && !thinking && (
+          <div>
+            {NARRATIVE.map((para,i) => (
+              <p key={i} style={{fontSize:12,color:TEXT,lineHeight:1.85,margin:i<NARRATIVE.length-1?"0 0 16px":"0",minHeight:"1.85em"}}>
+                {displayed[i]||""}
+                {i===(displayed.length>0?displayed.length-1:0) && !done && <span style={{display:"inline-block",width:2,height:"1em",background:TEXT,marginLeft:2,verticalAlign:"text-bottom",animation:"blink 0.8s step-end infinite"}}/>}
+              </p>
+            ))}
+            {done && (
+              <div style={{marginTop:16,paddingTop:14,borderTop:`1px solid ${BORDER}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:9,color:MUTED,letterSpacing:1}}>POWERED BY SEASON + TOURNAMENT DATA · Mar 8, 2026</span>
+                <button onClick={()=>{setStarted(false);setRk(k=>k+1);}} style={{background:"none",border:`1px solid ${BORDER}`,borderRadius:8,padding:"7px 14px",fontSize:10,fontWeight:800,color:MUTED,cursor:"pointer",letterSpacing:1}}>RESET ↺</button>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function ScoreTab({ data }) {
+  const total = data.score.SCAR + data.score.TEX;
+  const scPct = total===0 ? 50 : Math.round((data.score.SCAR/total)*100);
+  const qs = data.quarterScores || {SCAR:[0,0,0,0],TEX:[0,0,0,0]};
+  return (
+    <div>
+      <Card style={{padding:"24px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{flex:1,textAlign:"center"}}>
+            <div style={{fontSize:10,fontWeight:800,color:SC,letterSpacing:2,marginBottom:10}}>SOUTH CAROLINA</div>
+            <div style={{fontSize:"clamp(58px,14vw,86px)",fontWeight:900,color:TEXT,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{data.score.SCAR}</div>
+            <div style={{marginTop:8,fontSize:10,color:MUTED}}>Fouls: {data.fouls.SCAR}</div>
+            {data.possession==="SCAR" && <div style={{marginTop:8,display:"inline-block",background:SC,borderRadius:99,padding:"3px 10px",fontSize:9,fontWeight:800,color:"#fff",letterSpacing:1}}>● BALL</div>}
+          </div>
+          <div style={{textAlign:"center",minWidth:82}}>
+            <div style={{background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:10,padding:"10px 8px",marginBottom:6}}>
+              <div style={{fontSize:9,color:MUTED,fontWeight:700,letterSpacing:1,marginBottom:2}}>Q{data.quarter}</div>
+              <div style={{fontSize:22,fontWeight:900,color:TEXT,fontVariantNumeric:"tabular-nums",letterSpacing:-1}}>{data.timeLeft}</div>
+              <div style={{marginTop:4,fontSize:8,fontWeight:700,letterSpacing:1,color:data.clockRunning?SC:MUTED,animation:data.clockRunning?"pulse 2s ease-in-out infinite":"none"}}>
+                {data.clockRunning ? "● LIVE" : "⏸ PAUSED"}
+              </div>
+            </div>
+            <div style={{background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:8,padding:"5px 8px"}}>
+              <div style={{fontSize:8,color:MUTED,fontWeight:700,letterSpacing:1}}>ELAPSED</div>
+              <div style={{fontSize:13,fontWeight:800,color:TEXT,fontVariantNumeric:"tabular-nums"}}>{fmtTime(data.elapsed||0)}</div>
+            </div>
+          </div>
+          <div style={{flex:1,textAlign:"center"}}>
+            <div style={{fontSize:10,fontWeight:800,color:TEX,letterSpacing:2,marginBottom:10}}>TEXAS</div>
+            <div style={{fontSize:"clamp(58px,14vw,86px)",fontWeight:900,color:TEXT,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{data.score.TEX}</div>
+            <div style={{marginTop:8,fontSize:10,color:MUTED}}>Fouls: {data.fouls.TEX}</div>
+            {data.possession==="TEX" && <div style={{marginTop:8,display:"inline-block",background:TEX,borderRadius:99,padding:"3px 10px",fontSize:9,fontWeight:800,color:"#fff",letterSpacing:1}}>● BALL</div>}
+          </div>
+        </div>
+      </Card>
+      <Card>
+        <SLabel>Scoring Momentum</SLabel>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontSize:11,fontWeight:700,color:SC}}>SC {data.score.SCAR}</span>
+          <span style={{fontSize:11,fontWeight:700,color:TEX}}>{data.score.TEX} TEX</span>
+        </div>
+        <div style={{display:"flex",borderRadius:3,overflow:"hidden",height:7,background:SURFACE}}>
+          <div style={{width:`${scPct}%`,background:SC,transition:"width 0.8s ease"}}/><div style={{flex:1,background:TEX}}/>
+        </div>
+      </Card>
+      <Card>
+        <SLabel>Quarter Breakdown</SLabel>
+        <div style={{display:"grid",gridTemplateColumns:"30px 1fr 1fr 1fr 1fr 44px",gap:6,textAlign:"center",alignItems:"center"}}>
+          <div/>
+          {["Q1","Q2","Q3","Q4"].map(q => <div key={q} style={{fontSize:9,fontWeight:700,color:MUTED,letterSpacing:1}}>{q}</div>)}
+          <div style={{fontSize:9,fontWeight:700,color:MUTED}}>TOT</div>
+          <div style={{fontSize:10,fontWeight:800,color:SC,textAlign:"left"}}>SC</div>
+          {qs.SCAR.map((v,i) => <div key={i} style={{fontSize:14,fontWeight:700,color:v>0?TEXT:DIM}}>{v>0?v:"·"}</div>)}
+          <div style={{fontSize:16,fontWeight:900,color:SC}}>{data.score.SCAR}</div>
+          <div style={{fontSize:10,fontWeight:800,color:TEX,textAlign:"left"}}>TEX</div>
+          {qs.TEX.map((v,i) => <div key={i} style={{fontSize:14,fontWeight:700,color:v>0?TEXT:DIM}}>{v>0?v:"·"}</div>)}
+          <div style={{fontSize:16,fontWeight:900,color:TEX}}>{data.score.TEX}</div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function StatsTab({ data }) {
+  const sc = data.shooting.SCAR, tx = data.shooting.TEX;
+  const rows = [
+    {label:"FG%",   scV:pct(sc.fgm,sc.fga),     txV:pct(tx.fgm,tx.fga)},
+    {label:"FGM-A", scV:`${sc.fgm}-${sc.fga}`,  txV:`${tx.fgm}-${tx.fga}`},
+    {label:"3PT%",  scV:pct(sc.tpm,sc.tpa),      txV:pct(tx.tpm,tx.tpa)},
+    {label:"3PM-A", scV:`${sc.tpm}-${sc.tpa}`,   txV:`${tx.tpm}-${tx.tpa}`},
+    {label:"FT%",   scV:pct(sc.ftm,sc.fta),      txV:pct(tx.ftm,tx.fta)},
+    {label:"FTM-A", scV:`${sc.ftm}-${sc.fta}`,   txV:`${tx.ftm}-${tx.fta}`},
+    {label:"FOULS", scV:String(data.fouls.SCAR), txV:String(data.fouls.TEX)},
+  ];
+  const viz = [
+    {label:"FG%",  scV:sc.fga?(sc.fgm/sc.fga)*100:0, txV:tx.fga?(tx.fgm/tx.fga)*100:0},
+    {label:"3PT%", scV:sc.tpa?(sc.tpm/sc.tpa)*100:0,  txV:tx.tpa?(tx.tpm/tx.tpa)*100:0},
+    {label:"FT%",  scV:sc.fta?(sc.ftm/sc.fta)*100:0,  txV:tx.fta?(tx.ftm/tx.fta)*100:0},
+  ];
+  return (
+    <div>
+      <Card><SLabel>Team Statistics</SLabel><TeamHdr/>
+        {rows.map(r => (
+          <div key={r.label} style={{display:"grid",gridTemplateColumns:"1fr 70px 1fr",padding:"9px 0",borderBottom:`1px solid ${BORDER}`,alignItems:"center"}}>
+            <div style={{fontSize:14,fontWeight:700,color:TEXT}}>{r.scV}</div>
+            <div style={{fontSize:9,fontWeight:700,color:MUTED,letterSpacing:1,textAlign:"center"}}>{r.label}</div>
+            <div style={{fontSize:14,fontWeight:700,color:TEXT,textAlign:"right"}}>{r.txV}</div>
+          </div>
+        ))}
+      </Card>
+      <Card><SLabel>Shooting Comparison</SLabel><TeamHdr/>
+        {viz.map((r,i) => (
+          <div key={r.label} style={{marginBottom:i<viz.length-1?14:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{fontSize:10,fontWeight:700,color:SC}}>{r.scV.toFixed(0)}%</span>
+              <span style={{fontSize:9,fontWeight:700,color:MUTED,letterSpacing:1}}>{r.label}</span>
+              <span style={{fontSize:10,fontWeight:700,color:TEX}}>{r.txV.toFixed(0)}%</span>
+            </div>
+            <div style={{display:"flex",gap:3}}>
+              <div style={{flex:1,height:5,borderRadius:99,background:SURFACE,overflow:"hidden",transform:"scaleX(-1)"}}><div style={{width:`${r.scV}%`,height:"100%",background:SC,borderRadius:99}}/></div>
+              <div style={{flex:1,height:5,borderRadius:99,background:SURFACE,overflow:"hidden"}}><div style={{width:`${r.txV}%`,height:"100%",background:TEX,borderRadius:99}}/></div>
+            </div>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+function PlayersTab({ data }) {
+  const [active, setActive] = useState("SCAR");
+  const [expanded, setExpanded] = useState(null);
+  const color = active==="SCAR" ? SC : TEX;
+  return (
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        {["SCAR","TEX"].map(tm => (
+          <button key={tm} onClick={()=>{setActive(tm);setExpanded(null);}} style={{flex:1,padding:"10px 0",borderRadius:8,border:`1.5px solid ${active===tm?(tm==="SCAR"?SC:TEX):BORDER}`,background:active===tm?(tm==="SCAR"?SC:TEX):BG,color:active===tm?"#fff":MUTED,fontWeight:800,fontSize:10,cursor:"pointer",letterSpacing:2}}>
+            {tm==="SCAR" ? "SOUTH CAROLINA" : "TEXAS"}
+          </button>
+        ))}
+      </div>
+      {data.players[active].map((p,idx) => {
+        const key=`${active}-${idx}`, isOpen=expanded===key;
+        return (
+          <div key={key} style={{marginBottom:8}}>
+            <div onClick={()=>!p.inj&&setExpanded(e=>e===key?null:key)} style={{background:CARD,border:`1px solid ${isOpen?color:BORDER}`,borderRadius:isOpen?"12px 12px 0 0":12,padding:"12px 15px",opacity:p.inj?.55:1,cursor:p.inj?"default":"pointer"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:36,height:36,borderRadius:8,background:p.inj?DIM:color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0}}>{p.num}</div>
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:12,fontWeight:800,color:TEXT}}>{p.name}</span>
+                      {p.inj && <span style={{fontSize:11,fontWeight:900,color:RED}}>*</span>}
+                    </div>
+                    <div style={{fontSize:9,color:MUTED,marginTop:1,letterSpacing:1}}>
+                      {p.pos} · {active==="SCAR"?"Gamecocks":"Longhorns"}
+                      {p.inj && <span style={{color:RED,fontWeight:700,marginLeft:5}}>OUT · Season-Ending Injury</span>}
+                    </div>
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  {!p.inj && (
+                    <div style={{display:"flex",gap:12,textAlign:"center"}}>
+                      {[["PTS",p.pts],["REB",p.reb],["AST",p.ast],["STL",p.stl]].map(([l,v]) => (
+                        <div key={l}><div style={{fontSize:17,fontWeight:900,color:TEXT,fontVariantNumeric:"tabular-nums"}}>{v}</div><div style={{fontSize:8,color:MUTED,letterSpacing:1,fontWeight:700}}>{l}</div></div>
+                      ))}
+                    </div>
+                  )}
+                  {!p.inj && <span style={{fontSize:10,color:DIM,fontWeight:700}}>{isOpen?"▲":"▼"}</span>}
+                </div>
+              </div>
+            </div>
+            {isOpen && p.avg && (
+              <div style={{background:SURFACE,border:`1px solid ${color}`,borderTop:"none",borderRadius:"0 0 12px 12px",padding:"12px 15px"}}>
+                <div style={{fontSize:9,fontWeight:800,color:MUTED,letterSpacing:2,marginBottom:10,textAlign:"center"}}>SEASON AVERAGES</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,textAlign:"center"}}>
+                  {[["PTS",p.avg.pts],["REB",p.avg.reb],["AST",p.avg.ast],["FG%",p.avg.fg]].map(([l,v]) => (
+                    <div key={l} style={{background:CARD,borderRadius:8,padding:"10px 6px"}}>
+                      <div style={{fontSize:16,fontWeight:900,color}}>{v}</div>
+                      <div style={{fontSize:8,color:MUTED,letterSpacing:1,fontWeight:700,marginTop:2}}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div style={{padding:"8px 4px 0",fontSize:10,color:MUTED}}><span style={{color:RED,fontWeight:800}}>*</span> Out with season-ending injury</div>
+    </div>
+  );
+}
+
+function InfoTab({ data }) {
+  return (
+    <div>
+      <Card><SLabel>Season Comparison</SLabel><TeamHdr/>
+        {data.history.map(r => (
+          <div key={r.label} style={{display:"grid",gridTemplateColumns:"1fr 90px 1fr",padding:"10px 0",borderBottom:`1px solid ${BORDER}`,alignItems:"center"}}>
+            <div style={{fontSize:16,fontWeight:900,color:TEXT}}>{r.SCAR}</div>
+            <div style={{fontSize:9,fontWeight:700,color:MUTED,textAlign:"center",letterSpacing:1}}>{r.label.toUpperCase()}</div>
+            <div style={{fontSize:16,fontWeight:900,color:TEXT,textAlign:"right"}}>{r.TEX}</div>
+          </div>
+        ))}
+      </Card>
+      <Card>
+        <SLabel>Road to the Championship</SLabel>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+          {[{tm:"SCAR",color:SC,games:["def. Kentucky 87–64","def. LSU 83–77"]},{tm:"TEX",color:TEX,games:["def. Alabama 83–60","def. Ole Miss 85–68"]}].map(t => (
+            <div key={t.tm}>
+              <div style={{fontSize:9,fontWeight:800,color:t.color,letterSpacing:2,marginBottom:12}}>{t.tm==="SCAR"?"SOUTH CAROLINA":"TEXAS"}</div>
+              {t.games.map((g,i) => (
+                <div key={i} style={{display:"flex",gap:8,marginBottom:10,alignItems:"flex-start"}}>
+                  <div style={{width:18,height:18,borderRadius:99,background:t.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff",flexShrink:0}}>{i+1}</div>
+                  <div style={{fontSize:11,color:TEXT,lineHeight:1.5}}>{g}</div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card>
+        <SLabel>Series This Season</SLabel>
+        {[{score:"TEX 66, SC 64",note:"November · Las Vegas"},{score:"SC 68, TEX 65",note:"January · Columbia, SC"}].map((s,i) => (
+          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:i===0?`1px solid ${BORDER}`:"none"}}>
+            <span style={{fontSize:13,fontWeight:800,color:TEXT}}>{s.score}</span>
+            <span style={{fontSize:10,color:MUTED}}>{s.note}</span>
+          </div>
+        ))}
+      </Card>
+      <Card>
+        <SLabel>Game Info</SLabel>
+        {[["Date","Sunday, March 8, 2026"],["Tip-Off","3:00 PM ET"],["Venue","Bon Secours Wellness Arena"],["Location","Greenville, SC"],["Network","ESPN"],["Tournament","SEC Championship"],["Coach (SC)","Dawn Staley"],["Coach (TX)","Vic Schaefer"]].map(([k,v]) => (
+          <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`1px solid ${BORDER}`}}>
+            <span style={{fontSize:11,color:MUTED}}>{k}</span>
+            <span style={{fontSize:11,fontWeight:700,color:TEXT}}>{v}</span>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+function App() {
+  const [tab,  setTab]  = useState("score");
+  const [data, setData] = useState(INIT);
+  useGameClock(data, setData);
+  return (
+    <div style={{background:BG,minHeight:"100vh",fontFamily:"'Inter',sans-serif",color:TEXT,display:"flex",flexDirection:"column"}}>
+      <div style={{background:BG,borderBottom:`1px solid ${BORDER}`,padding:"12px 16px",position:"sticky",top:0,zIndex:200}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:11,fontWeight:900,letterSpacing:3,color:TEXT}}>SEC CHAMPIONSHIP</div>
+          <div style={{fontSize:9,color:MUTED,marginTop:2,letterSpacing:2}}>WOMEN'S BASKETBALL · 2026</div>
+        </div>
+        {tab!=="score" && (
+          <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",textAlign:"right"}}>
+            <div style={{fontSize:11,fontWeight:900}}>
+              <span style={{color:SC}}>SC {data.score.SCAR}</span>
+              <span style={{color:DIM,margin:"0 5px"}}>·</span>
+              <span style={{color:TEX}}>{data.score.TEX} TEX</span>
+            </div>
+            <div style={{fontSize:9,fontWeight:800,color:data.clockRunning?SC:MUTED,marginTop:2}}>{data.clockRunning?"● LIVE":data.timeLeft+" Q"+data.quarter}</div>
+          </div>
+        )}
+      </div>
+      <div style={{position:"sticky",top:53,zIndex:190,background:BG}}>
+        <TabBar tab={tab} setTab={setTab} pos="top"/>
+      </div>
+      <div style={{flex:1,maxWidth:700,width:"100%",margin:"0 auto",padding:"12px 10px 90px"}}>
+        {tab==="preview" && <PreviewTab/>}
+        {tab==="score"   && <ScoreTab   data={data}/>}
+        {tab==="stats"   && <StatsTab   data={data}/>}
+        {tab==="players" && <PlayersTab data={data}/>}
+        {tab==="info"    && <InfoTab    data={data}/>}
+      </div>
+      <UpdatePanel data={data} setData={setData}/>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:200,background:BG}}>
+        <TabBar tab={tab} setTab={setTab} pos="bottom"/>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
